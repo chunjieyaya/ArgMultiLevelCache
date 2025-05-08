@@ -19,6 +19,11 @@ MultiLevelCache 是一个灵活的.NET多级缓存类库，支持多种缓存策
 
 ## 使用方法
 
+### 包导入
+```csharp
+dotnet add package ArgMultiLevelCache
+```
+
 ### 依赖注入配置
 ```csharp
 // 在Startup.cs中配置服务
