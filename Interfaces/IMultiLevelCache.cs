@@ -22,7 +22,7 @@ namespace MultiLevelCache.Interfaces
         /// <param name="key">缓存键</param>
         /// <param name="dataFetcher">当缓存中不存在数据时，用于获取数据的委托</param>
         /// <returns>缓存值，如果不存在则通过dataFetcher获取</returns>
-        Task<T?> GetAsync<T>(string key, Func<Task<T?>>? dataFetcher = null);
+        Task<T?> GetAsync<T>(string key, Func<Task<T?>>? dataFetcher = null, TimeSpan? expiration = null);
 
         /// <summary>
         /// 设置缓存项，将值写入所有缓存层

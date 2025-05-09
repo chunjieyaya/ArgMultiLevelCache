@@ -30,7 +30,7 @@ namespace MultiLevelCache.Implementations
             _caches.Add(level, cache);
         }
 
-        public async Task<T?> GetAsync<T>(string key, Func<Task<T?>>? dataFetcher = null)
+        public async Task<T?> GetAsync<T>(string key, Func<Task<T?>>? dataFetcher = null, TimeSpan? expiration = null)
         {
             // 按照缓存级别顺序查找数据（数字越小优先级越高）
             foreach (var cache in _caches)
@@ -51,7 +51,7 @@ namespace MultiLevelCache.Implementations
                 if (value != null)
                 {
                     // 将从数据源获取的数据写入所有缓存层
-                    await SetAsync(key, value);
+                    await SetAsync(key, value, expiration);
                 }
                 return value;
             }
