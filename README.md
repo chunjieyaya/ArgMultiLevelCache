@@ -24,10 +24,6 @@ ArgMultiLevelCache 是一个灵活的.NET多级缓存类库，支持多种缓存
 dotnet add package ArgMultiLevelCache
 ```
 
-### 打包命令
-```bash
-    dotnet pack --configuration Release
-```
 
 ### 平台使用说明
 
