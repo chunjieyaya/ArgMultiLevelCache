@@ -7,7 +7,7 @@
     <Authors>吴春杰</Authors>
     <Company>吴春杰</Company>
     <PackageTags>cache;multilevel</PackageTags>
-    <PackageVersion>1.0.2</PackageVersion>
+    <PackageVersion>1.0.3</PackageVersion>
     <Description>多级缓存实现，包含内存缓存和Redis缓存</Description>
   </PropertyGroup>
 

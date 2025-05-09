@@ -40,6 +40,7 @@ namespace MultiLevelCache.Implementations
         public async Task SetAsync<T>(string key, T value, TimeSpan? expiration = null)
         {
             var jsonValue = JsonConvert.SerializeObject(value, _jsonSettings);
+            await _db.KeyDeleteAsync(key);
             await _db.StringSetAsync(key, jsonValue, expiration);
         }
 
