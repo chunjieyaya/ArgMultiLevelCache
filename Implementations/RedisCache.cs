@@ -1,5 +1,5 @@
 using System;
-using System.Text.Json;
+using Newtonsoft.Json;
 using System.Threading.Tasks;
 using MultiLevelCache.Interfaces;
 using StackExchange.Redis;
@@ -13,15 +13,16 @@ namespace MultiLevelCache.Implementations
     {
         private readonly IConnectionMultiplexer _redis;
         private readonly IDatabase _db;
-        private readonly JsonSerializerOptions _jsonOptions;
+        private readonly JsonSerializerSettings _jsonSettings;
 
         public RedisCache(string connectionString)
         {
             _redis = ConnectionMultiplexer.Connect(connectionString);
             _db = _redis.GetDatabase();
-            _jsonOptions = new JsonSerializerOptions
+            _jsonSettings = new JsonSerializerSettings
             {
-                PropertyNameCaseInsensitive = true
+                NullValueHandling = NullValueHandling.Ignore,
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore
             };
         }
 
@@ -33,12 +34,12 @@ namespace MultiLevelCache.Implementations
                 return default;
             }
 
-            return JsonSerializer.Deserialize<T>(value!);
+            return JsonConvert.DeserializeObject<T>(value!);
         }
 
         public async Task SetAsync<T>(string key, T value, TimeSpan? expiration = null)
         {
-            var jsonValue = JsonSerializer.Serialize(value, _jsonOptions);
+            var jsonValue = JsonConvert.SerializeObject(value, _jsonSettings);
             await _db.StringSetAsync(key, jsonValue, expiration);
         }
 

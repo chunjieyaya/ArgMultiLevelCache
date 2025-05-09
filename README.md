@@ -24,7 +24,11 @@ ArgMultiLevelCache 是一个灵活的.NET多级缓存类库，支持多种缓存
 dotnet add package ArgMultiLevelCache
 ```
 
-### 依赖注入配置
+### 平台使用说明
+
+#### .NET Core/.NET 5+
+在.NET Core和.NET 5+平台中，推荐使用依赖注入方式配置和使用缓存：
+
 ```csharp
 // 在Startup.cs中配置服务
 public void ConfigureServices(IServiceCollection services)
@@ -53,6 +57,58 @@ public class UserService
             $"user:{userId}",
             async () => await _userRepository.GetByIdAsync(userId)
         );
+    }
+}
+```
+
+#### .NET Framework
+在.NET Framework平台中，推荐使用静态工厂类进行全局访问，确保线程安全：
+
+```csharp
+// 在应用程序启动时配置缓存（如Global.asax.cs中）
+CacheFactory.Configure(options =>
+{
+    options.DefaultExpiration = TimeSpan.FromMinutes(30);
+    options.AddCacheLevel(new MemoryCache(), 1);                // 一级缓存：内存缓存
+    options.AddCacheLevel(new RedisCache("localhost:6379"), 2); // 二级缓存：Redis缓存
+});
+
+// 在任意位置使用缓存（线程安全）
+public class UserService
+{
+    public async Task<UserData> GetUserAsync(string userId)
+    {
+        return await CacheFactory.Default.GetAsync<UserData>(
+            $"user:{userId}",
+            async () => await GetUserFromDatabaseAsync(userId)
+        );
+    }
+
+    private async Task<UserData> GetUserFromDatabaseAsync(string userId)
+    {
+        // 从数据库获取用户数据的实现
+        return await Task.FromResult(new UserData());
+    }
+}
+
+// 在WebForm页面中使用
+public partial class UserProfile : System.Web.UI.Page
+{
+    private UserService _userService = new UserService();
+
+    protected async void Page_Load(object sender, EventArgs e)
+    {
+        if (!IsPostBack)
+        {
+            await LoadUserDataAsync();
+        }
+    }
+
+    private async Task LoadUserDataAsync()
+    {
+        var userId = Request.QueryString["userId"];
+        var userData = await _userService.GetUserAsync(userId);
+        // 使用userData更新页面控件
     }
 }
 ```

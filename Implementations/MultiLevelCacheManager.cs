@@ -26,13 +26,14 @@ namespace MultiLevelCache.Implementations
             {
                 throw new ArgumentException($"缓存级别 {level} 已经存在");
             }
+
             _caches.Add(level, cache);
         }
 
         public async Task<T?> GetAsync<T>(string key, Func<Task<T?>>? dataFetcher = null)
         {
             // 按照缓存级别顺序查找数据（数字越小优先级越高）
-            foreach (var cache in _caches.OrderBy(x => x.Key))
+            foreach (var cache in _caches)
             {
                 var value = await cache.Value.GetAsync<T>(key);
                 if (value != null)
@@ -61,7 +62,7 @@ namespace MultiLevelCache.Implementations
         public async Task SetAsync<T>(string key, T value, TimeSpan? expiration = null)
         {
             // 按优先级顺序将数据写入所有缓存层
-            foreach (var cache in _caches.OrderBy(x => x.Key))
+            foreach (var cache in _caches)
             {
                 // 只有在明确指定过期时间或设置了默认过期时间时才传递过期时间参数
                 var actualExpiration = expiration ?? _defaultExpiration;
@@ -72,7 +73,7 @@ namespace MultiLevelCache.Implementations
         public async Task RemoveAsync(string key)
         {
             // 按优先级顺序从所有缓存层中移除数据
-            foreach (var cache in _caches.OrderBy(x => x.Key))
+            foreach (var cache in _caches)
             {
                 await cache.Value.RemoveAsync(key);
             }
