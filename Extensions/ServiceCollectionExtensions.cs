@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using MultiLevelCache.Implementations;
 using MultiLevelCache.Interfaces;
 using MultiLevelCache.Options;
+using MultiLevelCache.PubSub; // Added for EventManager
 
 namespace MultiLevelCache.Extensions
 {
@@ -38,6 +39,19 @@ namespace MultiLevelCache.Extensions
                 return cacheManager;
             });
 
+            return services;
+        }
+
+        /// <summary>
+        /// Adds event manager services to the specified IServiceCollection.
+        /// </summary>
+        /// <param name="services">The IServiceCollection to add services to.</param>
+        /// <returns>The IServiceCollection so that additional calls can be chained.</returns>
+        public static IServiceCollection AddEventServices(this IServiceCollection services)
+        {
+            // Register EventManager as a singleton. 
+            // The constructor of EventManager calls LoadObservers, ensuring they are loaded at startup.
+            services.AddSingleton<EventManager>(sp => EventManager.Instance);
             return services;
         }
     }
