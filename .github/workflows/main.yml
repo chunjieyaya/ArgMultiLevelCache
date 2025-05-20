@@ -29,15 +29,15 @@ jobs:
       run: dotnet restore
 
     - name: Build project
-      run: dotnet build --configuration Release --framework ${{ matrix.target-framework }} --no-restore
+      run: dotnet build --configuration Release
 
     - name: Run tests
-      run: dotnet test --configuration Release --framework ${{ matrix.target-framework }} --no-build --verbosity normal
+      run: dotnet test --configuration Release
 
     - name: Pack library (NuGet)
       if: github.ref == 'refs/heads/main'
       run: |
-        dotnet pack src/ArgMultiLevelCache.csproj -c Release -f ${{ matrix.target-framework }} -o ./artifacts
+        dotnet pack src/ArgMultiLevelCache.csproj -c Release
 
     - name: Upload Artifacts (for manual inspection)
       if: github.ref == 'refs/heads/main'
