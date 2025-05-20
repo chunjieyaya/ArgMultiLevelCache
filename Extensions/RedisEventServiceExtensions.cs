@@ -25,5 +25,12 @@ namespace MultiLevelCache.Extensions
             
             return services;
         }
+
+        //非redis事件服务
+        public static IServiceCollection AddEventServices(this IServiceCollection services)
+        {
+            services.AddSingleton<EventManager>(sp => EventManager.Instance);
+            return services;
+        }
     }
 }

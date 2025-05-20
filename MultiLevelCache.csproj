@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <PackageId>ArgMultiLevelCache</PackageId>
     <TargetFrameworks>net462;net472;net48;netstandard2.0</TargetFrameworks>
@@ -7,15 +6,14 @@
     <Authors>吴春杰</Authors>
     <Company>吴春杰</Company>
     <PackageTags>cache;multilevel</PackageTags>
-    <PackageVersion>1.0.4</PackageVersion>
+    <PackageVersion>1.0.5</PackageVersion>
     <Description>多级缓存实现，包含内存缓存和Redis缓存，进程内发布订阅模式</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="6.0.0" />
-    <PackageReference Include="StackExchange.Redis" Version="2.6.122" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" version="6.0.0" />
+    <PackageReference Include="StackExchange.Redis" version="2.6.122" />
+    <PackageReference Include="Newtonsoft.Json" version="13.0.3" />
   </ItemGroup>
-
 </Project>

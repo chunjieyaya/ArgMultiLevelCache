@@ -280,6 +280,12 @@ public void ConfigureServices(IServiceCollection services)
         options.RetryDelayMs = 1000; // 1秒后重试
     });
 }
+//非redis
+public void ConfigureServices(IServiceCollection services)
+{
+    // 添加事件服务，配置重试策略
+    services.AddEventServices();
+}
 ```
 
 ## 贡献
