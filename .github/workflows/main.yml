@@ -13,13 +13,14 @@ jobs:
     runs-on: windows-latest  # 支持 .NET Framework 构建
     strategy:
       matrix:
-        target-framework: ['net472', 'net6.0', 'net7.0']
+        target-framework: ['net472','net6.0', 'net7.0']
         dotnet-version: ['6.0.x', '7.0.x']
 
     steps:
+
     - name: Checkout code
       uses: actions/checkout@v3
-
+    
     - name: Setup .NET SDK
       uses: actions/setup-dotnet@v2
       with:
@@ -29,15 +30,15 @@ jobs:
       run: dotnet restore
 
     - name: Build project
-      run: dotnet build --configuration Release --framework ${{ matrix.target-framework }} --no-restore
+      run: dotnet build --configuration Release
 
     - name: Run tests
-      run: dotnet test --configuration Release --framework ${{ matrix.target-framework }} --no-build --verbosity normal
+      run: dotnet test --configuration Release
 
     - name: Pack library (NuGet)
       if: github.ref == 'refs/heads/main'
       run: |
-        dotnet pack src/ArgMultiLevelCache.csproj -c Release -f ${{ matrix.target-framework }} -o ./artifacts
+        dotnet pack src/ArgMultiLevelCache.csproj -c Release
 
     - name: Upload Artifacts (for manual inspection)
       if: github.ref == 'refs/heads/main'
