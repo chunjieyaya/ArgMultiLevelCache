@@ -15,44 +15,57 @@ namespace MultiLevelCache.PubSub
     {
         private readonly IConnectionMultiplexer _redis;
         private readonly ISubscriber _subscriber;
-        private readonly ConcurrentDictionary<string, List<IEventObserver<object>>> _observers = new ConcurrentDictionary<string, List<IEventObserver<object>>>();
-        private static readonly Lazy<RedisEventManager> _instance = new Lazy<RedisEventManager>(() => new RedisEventManager());
+        private readonly ConcurrentDictionary<string, List<object>> _observers = new ConcurrentDictionary<string, List<object>>();
+        private static string _connectionString = null;
+        private static RedisEventManager _instance;
+        private static readonly object _lock = new object();
         private readonly JsonSerializerSettings _jsonSettings;
 
         /// <summary>
         /// 获取RedisEventManager的单例实例
         /// </summary>
-        public static RedisEventManager Instance => _instance.Value;
-
-        private RedisEventManager()
+        public static RedisEventManager Instance
         {
-            // 默认连接本地Redis
-            _redis = ConnectionMultiplexer.Connect("localhost:6379");
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_lock)
+                    {
+                        if (_instance == null)
+                        {
+                            _instance = new RedisEventManager(_connectionString);
+                        }
+                    }
+                }
+                return _instance;
+            }
+        }
+
+        private RedisEventManager(string connectionString)
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+                return;
+            _redis = ConnectionMultiplexer.Connect(connectionString);
             _subscriber = _redis.GetSubscriber();
             _jsonSettings = new JsonSerializerSettings
             {
                 NullValueHandling = NullValueHandling.Ignore,
                 ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                TypeNameHandling = TypeNameHandling.All // 包含类型信息以便正确反序列化
+                TypeNameHandling = TypeNameHandling.All
             };
-
             LoadObservers();
             SubscribeToRedisChannels();
         }
 
-        /// <summary>
-        /// 使用指定的Redis连接字符串初始化RedisEventManager
-        /// </summary>
-        /// <param name="connectionString">Redis连接字符串</param>
-        public static void Initialize(string connectionString)
+        public static void Initialize(string redisConnectionString)
         {
-            if (_instance.IsValueCreated)
+            lock (_lock)
             {
-                throw new InvalidOperationException("RedisEventManager已经被初始化，无法重新配置");
+                _connectionString = redisConnectionString;
+                // 下次访问Instance时会用新连接字符串重新创建
+                _instance = null; 
             }
-
-            // 强制初始化单例实例
-            var instance = _instance.Value;
         }
 
         private void LoadObservers()
@@ -75,12 +88,13 @@ namespace MultiLevelCache.PubSub
                         
                         if (interfaceType != null)
                         {
-                            string groupName = interfaceType.GetGenericArguments()[0].Name;
-
                             var observerInstance = Activator.CreateInstance(type);
                             if (observerInstance != null)
                             {
-                                RegisterObserver(groupName, observerInstance as IEventObserver<object>);
+                                // 反射调用 RegisterObserver<T>，保证分组正确
+                                var method = typeof(RedisEventManager).GetMethod("RegisterObserver");
+                                var genericMethod = method.MakeGenericMethod(interfaceType.GetGenericArguments()[0]);
+                                genericMethod.Invoke(this, new object[] { observerInstance });
                             }
                         }
                     }
@@ -95,7 +109,7 @@ namespace MultiLevelCache.PubSub
         private void SubscribeToRedisChannels()
         {
             // 订阅通用事件通道
-            _subscriber.Subscribe("events:all", (channel, message) =>
+            _subscriber.Subscribe("rob:events:all", (channel, message) =>
             {
                 try
                 {
@@ -118,33 +132,21 @@ namespace MultiLevelCache.PubSub
         {
             if (_observers.TryGetValue(groupName, out var groupObservers))
             {
-                // 尝试反序列化事件数据
                 try
                 {
-                    // 使用TypeNameHandling.All可以正确反序列化对象类型
                     var eventData = JsonConvert.DeserializeObject(eventDataJson, _jsonSettings);
                     if (eventData != null)
                     {
-                        // 按Order属性排序观察者
-                        var sortedObservers = groupObservers.OrderBy(o => o.Order).ToList();
-
+                        var sortedObservers = groupObservers.OrderBy(o => (int)o.GetType().GetProperty("Order").GetValue(o)).ToList();
                         foreach (var observer in sortedObservers)
                         {
                             try
                             {
-                                // 使用反射调用正确类型的HandleEventAsync方法
-                                var observerType = observer.GetType();
-                                var interfaceType = observerType.GetInterfaces().FirstOrDefault(i => 
-                                    i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEventObserver<>));
-                                
-                                if (interfaceType != null)
+                                var method = observer.GetType().GetMethod("HandleEventAsync");
+                                if (method != null)
                                 {
-                                    var method = interfaceType.GetMethod("HandleEventAsync");
-                                    if (method != null)
-                                    {
-                                        var task = (Task)method.Invoke(observer, new[] { eventData });
-                                        await task.ConfigureAwait(false);
-                                    }
+                                    var task = (Task)method.Invoke(observer, new object[] { eventData });
+                                    await task.ConfigureAwait(false);
                                 }
                             }
                             catch (Exception ex)
@@ -182,7 +184,7 @@ namespace MultiLevelCache.PubSub
             };
             
             string message = JsonConvert.SerializeObject(eventMessage);
-            await _subscriber.PublishAsync("events:all", message);
+            await _subscriber.PublishAsync("rob:events:all", message);
         }
 
         /// <summary>
@@ -192,17 +194,19 @@ namespace MultiLevelCache.PubSub
         {
             if (_observers.TryGetValue(groupName, out var groupObservers))
             {
-                // 按Order属性排序观察者
-                var sortedObservers = groupObservers.OrderBy(o => o.Order).ToList();
+                // 按Order属性排序观察者（用反射获取Order）
+                var sortedObservers = groupObservers.OrderBy(o => (int)o.GetType().GetProperty("Order").GetValue(o)).ToList();
 
                 foreach (var observer in sortedObservers)
                 {
                     try
                     {
-                        // 尝试将观察者转换为正确的泛型类型并处理事件
-                        if (observer is IEventObserver<T> typedObserver)
+                        // 用反射调用HandleEventAsync
+                        var method = observer.GetType().GetMethod("HandleEventAsync");
+                        if (method != null)
                         {
-                            await typedObserver.HandleEventAsync(eventArgs);
+                            var task = (Task)method.Invoke(observer, new object[] { eventArgs });
+                            await task.ConfigureAwait(false);
                         }
                     }
                     catch (Exception ex)
@@ -221,22 +225,16 @@ namespace MultiLevelCache.PubSub
         public void RegisterObserver<T>(IEventObserver<T> observer) where T : class
         {
             var groupName = typeof(T).Name;
-            RegisterObserver(groupName, observer as IEventObserver<object>);
-        }
-
-        private void RegisterObserver(string groupName, IEventObserver<object> observer)
-        {
-            if (observer == null) return;
-
-            _observers.AddOrUpdate(groupName, 
-                new List<IEventObserver<object>> { observer }, 
+            _observers.AddOrUpdate(groupName,
+                new List<object> { observer },
                 (key, existingList) =>
                 {
-                    existingList.Add(observer);
+                    if (!existingList.Any(o => o.GetType() == observer.GetType()))
+                        existingList.Add(observer);
                     return existingList;
                 });
         }
-
+       
         /// <summary>
         /// 事件消息包装类，用于Redis发布订阅
         /// </summary>

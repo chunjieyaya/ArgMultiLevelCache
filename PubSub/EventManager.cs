@@ -12,7 +12,7 @@ namespace MultiLevelCache.PubSub
     /// </summary>
     public class EventManager
     {
-        private readonly ConcurrentDictionary<string, List<IEventObserver<object>>> _observers = new ConcurrentDictionary<string, List<IEventObserver<object>>>();
+        private readonly ConcurrentDictionary<string, List<object>> _observers = new ConcurrentDictionary<string, List<object>>();
         private static readonly Lazy<EventManager> _instance = new(() => new EventManager());
 
         /// <summary>
@@ -35,33 +35,30 @@ namespace MultiLevelCache.PubSub
                 try
                 {
                     var types = assembly.GetTypes()
-                        .Where(p => observerType.IsAssignableFrom(p) && p.IsClass && !p.IsAbstract);
+                        .Where(p => p.IsClass && !p.IsAbstract && p.GetInterfaces().Any(i => 
+                            i.IsGenericType && i.GetGenericTypeDefinition() == observerType));
 
                     foreach (var type in types)
                     {
-                        // 分组直接用泛型参数类型名
-                        var interfaceType = type.GetInterfaces().FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == observerType);
-                        string groupName = interfaceType?.GetGenericArguments()[0].Name ?? "Default";
-
-                        if (!_observers.ContainsKey(groupName))
+                        var interfaceType = type.GetInterfaces().FirstOrDefault(i => 
+                            i.IsGenericType && i.GetGenericTypeDefinition() == observerType);
+                        
+                        if (interfaceType != null)
                         {
-                            _observers[groupName] = new List<IEventObserver<object>>();
-                        }
-
-                        var observerInstance = Activator.CreateInstance(type) as IEventObserver<object>;
-                        if (observerInstance != null)
-                        {
-                            _observers[groupName].Add(observerInstance);
+                            var observerInstance = Activator.CreateInstance(type);
+                            if (observerInstance != null)
+                            {
+                                // 反射调用 RegisterObserver<T>，保证分组正确
+                                var method = typeof(EventManager).GetMethod("RegisterObserver");
+                                var genericMethod = method.MakeGenericMethod(interfaceType.GetGenericArguments()[0]);
+                                genericMethod.Invoke(this, new object[] { observerInstance });
+                            }
                         }
                     }
                 }
-                catch (ReflectionTypeLoadException ex)
-                {
-                    Console.WriteLine($"Error loading types from assembly {assembly.FullName}: {ex.Message}");
-                }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing assembly {assembly.FullName}: {ex.Message}");
+                    Console.WriteLine($"加载观察者时出错: {ex.Message}");
                 }
             }
         }
@@ -70,28 +67,25 @@ namespace MultiLevelCache.PubSub
         /// 向指定组(如果未指定，则为默认组)中的所有观察者发布事件。
         /// </summary>
         /// <param name="eventArgs">事件参数(匿名对象)。</param>
-        /// <param name="groupName">事件组名称。默认为“默认”。</param>
+        /// <param name="groupName">事件组名称。默认为"默认"。</param>
         public async Task PublishEventAsync<T>(T eventArgs)
         {
             string groupName = typeof(T).Name;
             if (_observers.TryGetValue(groupName, out var groupObservers))
             {
-                // 按 Order 属性排序观察者
-                var sortedObservers = groupObservers.OrderBy(o => o.Order).ToList();
+                // 按 Order 属性排序观察者（用反射获取Order）
+                var sortedObservers = groupObservers.OrderBy(o => (int)o.GetType().GetProperty("Order").GetValue(o)).ToList();
 
                 foreach (var observer in sortedObservers)
                 {
                     try
                     {
-                        // 尝试将观察者转换为正确的泛型类型并处理事件
-                        if (observer is IEventObserver<T> typedObserver)
+                        // 用反射调用HandleEventAsync
+                        var method = observer.GetType().GetMethod("HandleEventAsync");
+                        if (method != null)
                         {
-                            await typedObserver.HandleEventAsync(eventArgs);
-                        }
-                        else
-                        {
-                             // 如果转换失败，记录警告或错误
-                             Console.WriteLine($"Warning: Observer {observer.GetType().Name} is not compatible with event type {typeof(T).Name}.");
+                            var task = (Task)method.Invoke(observer, new object[] { eventArgs });
+                            await task.ConfigureAwait(false);
                         }
                     }
                     catch (Exception ex)
@@ -107,11 +101,13 @@ namespace MultiLevelCache.PubSub
         public void RegisterObserver<T>(IEventObserver<T> observer) where T : class
         {
             var groupName = typeof(T).Name;
-            _observers.AddOrUpdate(groupName, new List<IEventObserver<object>> { observer as IEventObserver<object> }, (key, existingList) =>
-            {
-                existingList.Add(observer as IEventObserver<object>);
-                return existingList;
-            });
+            _observers.AddOrUpdate(groupName,
+                new List<object> { observer },
+                (key, existingList) =>
+                {
+                    existingList.Add(observer);
+                    return existingList;
+                });
         }
     }
 }

@@ -17,11 +17,12 @@ namespace MultiLevelCache.Extensions
         /// <returns>服务集合</returns>
         public static IServiceCollection AddRedisEventServices(this IServiceCollection services, string redisConnectionString)
         {
-            // 初始化Redis事件管理器
-            RedisEventManager.Initialize(redisConnectionString);
-            
             // 注册Redis事件管理器为单例服务
-            services.AddSingleton<RedisEventManager>(sp => RedisEventManager.Instance);
+            services.AddSingleton<RedisEventManager>(sp => 
+            {
+                RedisEventManager.Initialize(redisConnectionString);
+                return RedisEventManager.Instance;
+            });
             
             return services;
         }
