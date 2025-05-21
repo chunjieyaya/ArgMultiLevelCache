@@ -1,10 +1,11 @@
-using System;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MultiLevelCache.Implementations;
 using MultiLevelCache.Interfaces;
 using MultiLevelCache.Options;
-using MultiLevelCache.PubSub; // Added for EventManager
+using MultiLevelCache.PubSub;
+using System;
 
 namespace MultiLevelCache.Extensions
 {
@@ -43,15 +44,37 @@ namespace MultiLevelCache.Extensions
         }
 
         /// <summary>
-        /// Adds event manager services to the specified IServiceCollection.
+        /// 添加Redis事件服务到依赖注入容器
         /// </summary>
-        /// <param name="services">The IServiceCollection to add services to.</param>
-        /// <returns>The IServiceCollection so that additional calls can be chained.</returns>
+        /// <param name="services">服务集合</param>
+        /// <param name="redisConnectionString">Redis连接字符串</param>
+        /// <returns>服务集合</returns>
+        public static IServiceCollection AddRedisEventServices(this IServiceCollection services, string redisConnectionString)
+        {
+            // 注册Redis事件管理器为单例服务
+            services.AddSingleton<RedisEventManager>(sp =>
+            {
+                // 获取日志服务
+                var logger = sp.GetService<ILogger<RedisEventManager>>();
+                // 使用日志服务初始化Redis事件管理器
+                RedisEventManager.Initialize(redisConnectionString, logger);
+                return RedisEventManager.Instance;
+            });
+
+            return services;
+        }
+
+        //非redis事件服务
         public static IServiceCollection AddEventServices(this IServiceCollection services)
         {
-            // Register EventManager as a singleton. 
-            // The constructor of EventManager calls LoadObservers, ensuring they are loaded at startup.
-            services.AddSingleton<EventManager>(sp => EventManager.Instance);
+            services.AddSingleton<EventManager>(sp =>
+            {
+                // 获取日志服务
+                var logger = sp.GetService<ILogger<EventManager>>();
+                // 使用日志服务初始化Redis事件管理器
+                EventManager.Initialize(logger);
+                return EventManager.Instance;
+            });
             return services;
         }
     }

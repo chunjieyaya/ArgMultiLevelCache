@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 
 namespace MultiLevelCache.PubSub
 {
@@ -14,6 +15,7 @@ namespace MultiLevelCache.PubSub
     {
         private readonly ConcurrentDictionary<string, List<object>> _observers = new ConcurrentDictionary<string, List<object>>();
         private static readonly Lazy<EventManager> _instance = new(() => new EventManager());
+        private static ILogger<EventManager> _logger;
 
         /// <summary>
         /// Gets the singleton instance of the EventManager.
@@ -23,6 +25,14 @@ namespace MultiLevelCache.PubSub
         private EventManager()
         {
             LoadObservers();
+        }
+
+        /// <summary>
+        /// Initializes the EventManager with a logger
+        /// </summary>
+        public static void Initialize(ILogger<EventManager> logger)
+        {
+            _logger = logger;
         }
 
         private void LoadObservers()
@@ -58,7 +68,7 @@ namespace MultiLevelCache.PubSub
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"加载观察者时出错: {ex.Message}");
+                    _logger?.LogError(ex, "加载观察者时出错");
                 }
             }
         }
@@ -90,7 +100,7 @@ namespace MultiLevelCache.PubSub
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error handling event in observer {observer.GetType().Name}: {ex.Message}");
+                        _logger?.LogError(ex, "Error handling event in observer {ObserverName}", observer.GetType().Name);
                     }
                 }
             }
@@ -105,7 +115,10 @@ namespace MultiLevelCache.PubSub
                 new List<object> { observer },
                 (key, existingList) =>
                 {
-                    existingList.Add(observer);
+
+                    if (!existingList.Any(o => o.GetType() == observer.GetType()))
+                        existingList.Add(observer);
+
                     return existingList;
                 });
         }
